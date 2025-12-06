@@ -1,3 +1,4 @@
+package PDU;
 public class PriorityQueue {
     private PQNode front;
 
@@ -32,6 +33,17 @@ public class PriorityQueue {
         front = front.next;
         return val;
     }
+
+    public int peekPriority() {
+        if (front == null) return Integer.MAX_VALUE;
+        return front.priority;
+    }
+
+    public String peekData() {
+        if (front == null) return null;
+        return front.data;
+    }
+
 
     public boolean isEmpty() {
         return front == null;

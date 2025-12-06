@@ -1,3 +1,4 @@
+package Topology;
 public class Edge {
     public String portA;   // "S1:1"
     public String portB;   // "S2:1"

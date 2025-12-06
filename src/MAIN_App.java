@@ -1,3 +1,5 @@
+import CLI.CLI_Shell;
+
 public class MAIN_App {
     public static void main(String[] args) {
         System.out.println("Booting NetTracer IOS...");

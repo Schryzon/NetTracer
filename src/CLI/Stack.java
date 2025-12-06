@@ -1,3 +1,4 @@
+package CLI;
 public class Stack {
     private StackNode top;
 

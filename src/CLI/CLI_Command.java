@@ -1,3 +1,4 @@
+package CLI;
 public interface CLI_Command {
     void execute(String[] args);
     

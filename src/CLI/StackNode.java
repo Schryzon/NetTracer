@@ -1,3 +1,4 @@
+package CLI;
 public class StackNode {
     public String data;
     public StackNode next;
