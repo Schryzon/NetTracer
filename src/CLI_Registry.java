@@ -1,7 +1,18 @@
+import java.util.HashMap;
+import java.util.Map;
+
 public class CLI_Registry {
-    
+    private Map<String, CLI_Command> commandMap;
+
     public CLI_Registry() {
-    
+        commandMap = new HashMap<>();
+        registerCommands();
+    }
+
+    private void registerCommands() {
+        // Daftarin command di sini
+        commandMap.put("version", new CMD_Version());
+        commandMap.put("show", new CMD_Show());
     }
 
     public void dispatch(String inputLine) {
@@ -10,46 +21,21 @@ public class CLI_Registry {
         String[] parts = inputLine.trim().split("\\s+");
         String keyword = parts[0].toLowerCase();
 
-        String[] args = new String[parts.length - 1];
-        System.arraycopy(parts, 1, args, 0, args.length);
-
-        switch (keyword) {
-            case "exit":
-            case "quit":
-                System.out.println("Shutting down...");
-                System.exit(0);
-                break;
-                
-            case "help":
-                System.out.println("Available commands: show, help, exit");
-                break;
-                
-            case "show":
-                handleShow(args);
-                break;
-                
-            case "ver":
-            case "version":
-                System.out.println("NetTracer IOS Version 1.0 (Day 1 Build)");
-                break;
-
-            default:
-                System.out.println("Error: Unknown command '" + keyword + "'");
+        // Cek command khusus exit
+        if (keyword.equals("exit") || keyword.equals("quit")) {
+            System.out.println("Bye!");
+            System.exit(0);
         }
-    }
 
-    private void handleShow(String[] args) {
-        if (args.length == 0) {
-            System.out.println("Incomplete command. Try 'show version' or 'show topology'");
-            return;
-        }
-        
-        if (args[0].equals("version")) {
-            System.out.println("NetTracer IOS 1.0");
-        } else if (args[0].equals("topology")) {
-            System.out.println("[Stub] Topology Graph not yet implemented (Waiting for Dev C)");
+        // Cari command di map
+        if (commandMap.containsKey(keyword)) {
+            String[] args = new String[parts.length - 1];
+            System.arraycopy(parts, 1, args, 0, args.length);
+            
+            // Eksekusi via Interface
+            commandMap.get(keyword).execute(args);
         } else {
-            System.out.println("Unknown show option: " + args[0]);
+            System.out.println("Unknown command: " + keyword);
         }
     }
 }
