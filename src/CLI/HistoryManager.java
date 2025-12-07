@@ -17,10 +17,9 @@ public class HistoryManager {
 
     public static void registerAction(String originalCmd, String inverseCmd) {
         if(isPerformingUndoRedo) return;
-
-        undoStack.push(inverseCmd);
+        // Simpan satu paket: inverse#original
         undoStack.push(inverseCmd + "#" + originalCmd);
-        redoStack.clear();
+        redoStack.clear(); // Setiap aksi baru, redoStack harus dikosongkan
     }
 
     public static void undo(CLI_Registry registry) {
@@ -28,18 +27,14 @@ public class HistoryManager {
             System.out.println("% Nothing to undo");
             return;
         }
-
         String packet = undoStack.pop();
-        String[] parts = packet.split("#");
+        String[] parts = packet.split("#", 2);
         String inverse = parts[0];
         String original = parts[1];
-
         System.out.println("UNDO> " + inverse);
-
         isPerformingUndoRedo = true;
         registry.dispatch(inverse);
         isPerformingUndoRedo = false;
-
         redoStack.push(packet);
     }
 
@@ -48,17 +43,14 @@ public class HistoryManager {
             System.out.println("% Nothing to redo");
             return;
         }
-
         String packet = redoStack.pop();
-        String[] parts = packet.split("#");
+        String[] parts = packet.split("#", 2);
+        String inverse = parts[0];
         String original = parts[1];
-
         System.out.println("REDO> " + original);
-
         isPerformingUndoRedo = true;
         registry.dispatch(original);
         isPerformingUndoRedo = false;
-
         undoStack.push(packet);
     }
 }

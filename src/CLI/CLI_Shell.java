@@ -10,7 +10,17 @@ public class CLI_Shell {
         NORMAL,
         CONFIG;
     }
-    private String hostname = "ios";
+    private static String hostname = "ios";
+
+    public static void setHostname(String newHostname) {
+        if (newHostname != null && !newHostname.isEmpty()) {
+            hostname = newHostname;
+        }
+    }
+
+    public static String getHostname() {
+        return hostname;
+    }
 
     public CLI_Shell() {
         this.registry = new CLI_Registry();
@@ -23,7 +33,7 @@ public class CLI_Shell {
         Scanner scanner = new Scanner(System.in);
         while (isRunning) {
             String promptChar = (mode == CLI_Mode.CONFIG) ? "(config)# " : "> ";
-            System.out.print(hostname + promptChar);
+            System.out.print(getHostname() + promptChar);
 
             if (!scanner.hasNextLine()) break;
             String input = scanner.nextLine().trim();

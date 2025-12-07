@@ -24,6 +24,10 @@ public class CLI_Registry {
         register("recover-link", new CMD_RecoverLink());
         register("undo", new CMD_Undo());
         register("redo", new CMD_Redo());
+        register("del-switch", new CMD_DelSwitch());
+        register("rename-switch", new CMD_RenameSwitch());
+        register("find-switch", new CMD_FindSwitch());
+        register("change-hostname", new CMD_Hostname());
 
         // tambah sesuai keperluan
     }
