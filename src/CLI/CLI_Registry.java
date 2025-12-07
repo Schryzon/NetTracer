@@ -22,6 +22,8 @@ public class CLI_Registry {
         register("del-link",     new CMD_DelLink());
         register("fail-link",    new CMD_FailLink());
         register("recover-link", new CMD_RecoverLink());
+        register("undo", new CMD_Undo());
+        register("redo", new CMD_Redo());
 
         // tambah sesuai keperluan
     }

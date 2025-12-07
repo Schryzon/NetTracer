@@ -28,7 +28,9 @@ public class CLI_Shell {
             if (!scanner.hasNextLine()) break;
             String input = scanner.nextLine().trim();
 
-            if (!input.isEmpty()) commandHistory.push(input);
+            if (!input.isEmpty()) {
+                HistoryManager.logCommand(input);
+            }
 
             // masuk mode config
             if ((input.equals("configure terminal") || input.equals("conf t")) && mode == CLI_Mode.NORMAL) {

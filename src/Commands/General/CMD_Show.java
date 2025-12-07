@@ -55,7 +55,7 @@ public class CMD_Show implements CLI_Command {
         }
 
         if (equals(sub, "history")) {
-            System.out.println("[history not implemented yet]");
+            CLI.HistoryManager.showLog();
             return;
         }
 

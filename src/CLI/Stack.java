@@ -1,4 +1,5 @@
 package CLI;
+
 public class Stack {
     private StackNode top;
 
@@ -36,5 +37,9 @@ public class Stack {
             System.out.println(cur.data);
             cur = cur.next;
         }
+    }
+
+    public void clear() {
+        top = null;
     }
 }
