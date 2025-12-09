@@ -1,8 +1,7 @@
 package PDU;
 
-// NetPDU.java
 // PDU string format: "ICMP|TYPE|SEQ|SRC|DST|TTL|TSENT|HOPIDX|PATHLEN|PATHCSV"
-// TYPE: REQ or RPL
+// TYPE: REQ (request) or RPL (reply)
 public class PDU {
 
     public static String make(String type, int seq, String src, String dst,

@@ -5,36 +5,36 @@ import Commands.Switches.*;
 public class CLI_Registry {
 
     // Maksimal 64 command
-    private static final int MAX_CMD = 64;
+    public static final int MAX_CMD = 64;
 
-    private static String[] cmd_name  = new String[MAX_CMD];
-    private static CLI_Command[] cmd_exec = new CLI_Command[MAX_CMD];
-    private static int cmd_count = 0;
+    public static String[] cmd_name  = new String[MAX_CMD];
+    public static CLI_Command[] cmd_exec = new CLI_Command[MAX_CMD];
+    public static int cmd_count = 0;
 
     public static void init() {
         cmd_count = 0;
         register("help", new CMD_Help());
         register("show", new CMD_Show());
         register("ping", new CMD_Ping());
-        register("add-switch",   new CMD_AddSwitch());
+        register("hostname", new CMD_Hostname());
+        register("add-switch", new CMD_AddSwitch());
+        register("del-switch", new CMD_DelSwitch());
         register("set-priority", new CMD_SetPriority());
-        register("add-link",     new CMD_AddLink());
-        register("del-link",     new CMD_DelLink());
-        register("fail-link",    new CMD_FailLink());
+        register("add-link", new CMD_AddLink());
+        register("del-link", new CMD_DelLink());
+        register("fail-link", new CMD_FailLink());
         register("recover-link", new CMD_RecoverLink());
+        register("find-switch", new CMD_FindSwitch());
+        register("rename-switch", new CMD_RenameSwitch());
         register("undo", new CMD_Undo());
         register("redo", new CMD_Redo());
-        register("del-switch", new CMD_DelSwitch());
-        register("rename-switch", new CMD_RenameSwitch());
-        register("find-switch", new CMD_FindSwitch());
-        register("change-hostname", new CMD_Hostname());
 
         // tambah sesuai keperluan
     }
 
-    private static void register(String name, CLI_Command exec) {
+    public static void register(String name, CLI_Command exec) {
         if (cmd_count >= MAX_CMD) {
-            System.out.println("% registry full");
+            System.out.println("% registry full!");
             return;
         }
         cmd_name[cmd_count]  = name;
@@ -42,7 +42,7 @@ public class CLI_Registry {
         cmd_count++;
     }
 
-    private static int find_command(String key) {
+    public static int find_command(String key) {
         // linear search sederhana
         for (int i = 0; i < cmd_count; i++) {
             if (str_equal(cmd_name[i], key)) return i;
@@ -63,7 +63,7 @@ public class CLI_Registry {
         String keyword = read_word(line, 0);
 
         if (str_equal(keyword, "exit") || str_equal(keyword, "quit")) {
-            System.out.println("Bye!");
+            System.out.println("Exit -- Bye!");
             System.exit(0);
         }
 
@@ -81,13 +81,13 @@ public class CLI_Registry {
         cmd_exec[idx].execute(args);
     }
 
-    private static boolean str_equal(String a, String b) {
+    public static boolean str_equal(String a, String b) {
         if (a == null && b == null) return true;
         if (a == null) return false;
         return a.equals(b);
     }
 
-    private static String trim(String s) {
+    public static String trim(String s) {
         int i = 0, j = s.length() - 1;
         while (i <= j && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) i++;
         while (j >= i && (s.charAt(j) == ' ' || s.charAt(j) == '\t')) j--;
@@ -96,7 +96,7 @@ public class CLI_Registry {
     }
 
     // baca kata pertama
-    private static String read_word(String s, int pos) {
+    public static String read_word(String s, int pos) {
         int n = s.length();
         // skip whitespace
         while (pos < n && is_ws(s.charAt(pos))) pos++;
@@ -106,7 +106,7 @@ public class CLI_Registry {
     }
 
     // lompat kata pertama → return posisi setelah kata
-    private static int skip_word(String s, int pos) {
+    public static int skip_word(String s, int pos) {
         int n = s.length();
         // skip space
         while (pos < n && is_ws(s.charAt(pos))) pos++;
@@ -118,7 +118,7 @@ public class CLI_Registry {
     }
 
     // parse seluruh argumen setelah posisi tertentu
-    private static String[] parse_args(String s, int pos) {
+    public static String[] parse_args(String s, int pos) {
         int n = s.length();
         // Hitung jumlah argumen dulu
         int count = 0;
@@ -153,7 +153,7 @@ public class CLI_Registry {
         return args;
     }
 
-    private static boolean is_ws(char c) {
+    public static boolean is_ws(char c) {
         return (c == ' ' || c == '\t');
     }
 

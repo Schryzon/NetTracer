@@ -10,6 +10,6 @@ public class CMD_Redo implements CLI_Command{
     }
 
     public String getDescription() {
-        return "Redo the undone action";
+        return "Redo the previously undone action";
     }
 }

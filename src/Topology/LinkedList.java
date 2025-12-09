@@ -1,6 +1,6 @@
 package Topology;
 public class LinkedList {
-    private LLNode head;
+    public LLNode head;
 
     public LinkedList() {
         head = null;

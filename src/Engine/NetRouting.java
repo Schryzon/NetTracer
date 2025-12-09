@@ -1,84 +1,103 @@
-// NetRouting.java — BFS hops di atas Topology.Graph (tanpa util)
 package Engine;
 
 import Topology.Graph;
 
 public class NetRouting {
 
-    // cari indeks switch berdasarkan nama
-    static int idxSw(String name){
-        int i;
-        for (i=0;i<Graph.swCount;i++){
-            if (Graph.swName[i]!=null && Graph.swName[i].equals(name)) return i;
+
+    /** Return switch index by name, or -1 if not found. */
+    static int switchIndex(String name) {
+        for (int i = 0; i < Graph.swCount; i++) {
+            if (Graph.swName[i] != null && Graph.swName[i].equals(name)) return i;
         }
         return -1;
     }
 
-    // BFS: path switch-name dari A ke B. Return CSV: "S1,S2,S3"
-    // Jika tidak ada path → return "".
-    public static String bfsPathCsv(String A, String B){
-        int n = Graph.swCount;
-        int s = idxSw(A), t = idxSw(B);
-        if (s<0 || t<0) return "";
-        if (s==t) return A;
+    /** True if link at index e is administratively/physically up. */
+    static boolean linkActive(int e) {
+        return Graph.linkUp[e] == 1;
+    }
 
-        int[] vis = new int[n];
-        int[] par = new int[n];
-        int[] q = new int[n];
-        int qh=0, qt=0, i;
+    /** Get switch index at endpoint A of link e. */
+    static int endpointA(int e) {
+        String sw = Graph.getSwitchFromPort(Graph.linkA[e]);
+        return switchIndex(sw);
+    }
 
-        for (i=0;i<n;i++){ vis[i]=0; par[i]=-1; }
+    /** Get switch index at endpoint B of link e. */
+    static int endpointB(int e) {
+        String sw = Graph.getSwitchFromPort(Graph.linkB[e]);
+        return switchIndex(sw);
+    }
 
-        q[qt++] = s; vis[s]=1;
+    /**
+     * BFS path from A to B in switch-space, returned as CSV: "S1,S2,S3".
+     * Empty string means no path.
+     */
+    public static String bfsPathCsv(String A, String B) {
+        int nSwitches = Graph.swCount;
+        int src = switchIndex(A), dst = switchIndex(B);
+        if (src < 0 || dst < 0) return "";
+        if (src == dst) return A;
 
-        while (qh<qt){
-            int u = q[qh++];
-            if (u==t) break;
-            // scan neighbors dari link aktif
-            for (i=0;i<Graph.linkCount;i++){
-                if (Graph.linkUp[i]==0) continue;
-                int a = idxSw(Graph.getSwitchFromPort(Graph.linkA[i]));
-                int b = idxSw(Graph.getSwitchFromPort(Graph.linkB[i]));
-                if (a==u && vis[b]==0){ vis[b]=1; par[b]=a; q[qt++]=b; }
-                if (b==u && vis[a]==0){ vis[a]=1; par[a]=b; q[qt++]=a; }
+        int[] visited = new int[nSwitches];
+        int[] parent  = new int[nSwitches];
+        int[] queue   = new int[nSwitches];
+        int head = 0, tail = 0;
+
+        for (int i = 0; i < nSwitches; i++) { visited[i] = 0; parent[i] = -1; }
+
+        queue[tail++] = src;
+        visited[src] = 1;
+
+        // BFS over active links
+        while (head < tail) {
+            int u = queue[head++];
+            if (u == dst) break;
+
+            for (int e = 0; e < Graph.linkCount; e++) {
+                if (!linkActive(e)) continue;
+                int a = endpointA(e), b = endpointB(e);
+                if (a == u && visited[b] == 0) { visited[b] = 1; parent[b] = a; queue[tail++] = b; }
+                if (b == u && visited[a] == 0) { visited[a] = 1; parent[a] = b; queue[tail++] = a; }
             }
         }
 
-        if (vis[t]==0) return "";
+        if (visited[dst] == 0) return "";
 
-        // reconstruct t->s
-        int[] rev = new int[n];
-        int rc=0, cur=t;
-        while (cur!=-1 && cur!=s){ rev[rc++]=cur; cur=par[cur]; }
-        rev[rc++] = s;
+        // Reconstruct dst -> src into rev[], then emit CSV src..dst
+        int[] rev = new int[nSwitches];
+        int rlen = 0, cur = dst;
+        while (cur != -1 && cur != src) { rev[rlen++] = cur; cur = parent[cur]; }
+        rev[rlen++] = src;
 
-        // build CSV s..t
-        String out = "";
-        for (i=rc-1;i>=0;i--){
-            out += Graph.swName[rev[i]];
-            if (i!=0) out += ",";
+        String csv = "";
+        for (int i = rlen - 1; i >= 0; i--) {
+            csv += Graph.swName[rev[i]];
+            if (i != 0) csv += ",";
         }
-        return out;
+        return csv;
     }
 
-    // Ambil elemen ke-idx dari CSV path; idx aman
-    public static String csvAt(String csv, int idx){
+    /** Return item at index from a CSV like "A,B,C"; empty if out of range. */
+    public static String csvAt(String csv, int idx) {
         int n = csv.length();
-        int k = 0; int start=0; int i;
-        for (i=0;i<=n;i++){
-            if (i==n || csv.charAt(i)==','){
-                if (k==idx) return csv.substring(start,i);
-                k++; start=i+1;
+        int field = 0, start = 0;
+        for (int i = 0; i <= n; i++) {
+            if (i == n || csv.charAt(i) == ',') {
+                if (field == idx) return csv.substring(start, i);
+                field++;
+                start = i + 1;
             }
         }
         return "";
     }
 
-    // Hitung jumlah node di CSV
-    public static int csvCount(String csv){
-        if (csv==null || csv.length()==0) return 0;
-        int c=1, i;
-        for (i=0;i<csv.length();i++) if (csv.charAt(i)==',') c++;
-        return c;
+    /** Count nodes in CSV like "A,B,C". */
+    public static int csvCount(String csv) {
+        if (csv == null || csv.length() == 0) return 0;
+        int count = 1;
+        for (int i = 0; i < csv.length(); i++) if (csv.charAt(i) == ',') count++;
+        return count;
     }
 }

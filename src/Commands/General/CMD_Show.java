@@ -8,13 +8,13 @@ public class CMD_Show implements CLI_Command {
 
     public void execute(String[] args) {
         if (args == null || args.length == 0) {
-            System.out.println("Incomplete command. Try 'show version'");
+            print_show_usage();
             return;
         }
 
         String sub = args[0];
 
-        if (equals(sub, "version")) {
+        if (equals(sub, "version") || equals(sub, "v")) {
             System.out.println("NetTracer IOS 1.1");
             return;
         }
@@ -37,10 +37,7 @@ public class CMD_Show implements CLI_Command {
                 AsciiTopo.show_path(args[2], args[3]);
                 return;
             }
-            System.out.println("Usage:");
-            System.out.println("  show ascii");
-            System.out.println("  show ascii mst");
-            System.out.println("  show ascii path <A> <B>");
+            print_ascii_usage();
             return;
         }
 
@@ -60,6 +57,25 @@ public class CMD_Show implements CLI_Command {
         }
 
         System.out.println("Unknown show option: " + sub);
+    }
+
+    private void print_show_usage() {
+        System.out.println("Available 'show' commands:");
+        System.out.println("  show version          - Show OS version");
+        System.out.println("  show topology         - Show raw graph topology");
+        System.out.println("  show ascii            - Show ASCII topology");
+        System.out.println("  show ascii mst        - Show MST in ASCII");
+        System.out.println("  show ascii path A B   - Show shortest path A→B");
+        System.out.println("  show switches         - List switches");
+        System.out.println("  show links            - List links");
+        System.out.println("  show history          - Show CLI history");
+    }
+
+    private void print_ascii_usage() {
+        System.out.println("Usage:");
+        System.out.println("  show ascii");
+        System.out.println("  show ascii mst");
+        System.out.println("  show ascii path <A> <B>");
     }
 
     private void show_switches() {

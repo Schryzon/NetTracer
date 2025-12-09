@@ -2,138 +2,171 @@ package Utils;
 import Topology.Graph;
 
 /**
- * AsciiTopo — render topology ke kanvas ASCII.
- * Syarat: HANYA baca array publik di Graph (swName, linkA/B, linkCost, linkUp, swCount, linkCount).
- * Highlight mode:
- *  - NORMAL: semua link titik "."
- *  - MST: jalur MST ditandai '='
- *  - PATH: rute terpendek Sx->Sy ditandai '#'
+ * AsciiTopo — ASCII topology renderer (no java.util).
+ * - Kotak node: +-----+ / | NAME | / +-----+
+ * - Link normal '.' , MST '=' , Path '#'
+ * - Layout adaptif: radius dihitung dari N & lebar kotak.
+ * - Connector: garis dimulai/berakhir di TEPI kotak (bukan dari tengah).
  */
 public class AsciiTopo {
 
-    // ukuran kanvas
-    static final int W = 80;
-    static final int H = 24;
+    // ===== Canvas (bisa diubah via setCanvas) =====
+    static int W = 120;
+    static int H = 40;
 
+    // Node box metrics
+    static final int PAD_X = 2;     // spasi kiri-kanan nama
+    static final int BOX_H = 3;     // top, mid, bottom
+    static final int MIN_BOX_W = 7; // minimal lebar kotak
+    static final int MIN_GAP = 4;   // jarak minimal antar pusat kotak sepanjang busur
+
+    // Data gambar
     static char[][] cv = new char[H][W];
-    // posisi tiap switch
-    static int[] nx = new int[Graph.MAX_SWITCH];
-    static int[] ny = new int[Graph.MAX_SWITCH];
+    static int[] cx = new int[Graph.MAX_SWITCH];  // center x
+    static int[] cy = new int[Graph.MAX_SWITCH];  // center y
+    static int[] halfW = new int[Graph.MAX_SWITCH]; // setengah lebar kotak per node
 
-    // buffer bantu
-    static int[] mstFlag = new int[Graph.MAX_LINK]; // 1 jika edge dipilih MST (lokal)
-    static int[] pathEdge = new int[Graph.MAX_LINK]; // 1 jika edge terpakai di path (lokal)
+    static int[] mstEdge  = new int[Graph.MAX_LINK];
+    static int[] pathEdge = new int[Graph.MAX_LINK];
 
-    // ==== API ====
+    // ===== Public API =====
+    public static void setCanvas(int width, int height){
+        if (width < 40) width = 40;
+        if (height < 12) height = 12;
+        W = width; H = height;
+        cv = new char[H][W];
+    }
+
     public static void show_normal() {
-        clear();
-        layout_circle();
-        draw_all_edges('.');
-        draw_nodes();
-        flush();
+        clear(); layout_circle(); draw_all_edges('.'); draw_boxes(); flush();
     }
-
     public static void show_mst() {
-        clear();
-        layout_circle();
-        kruskal_mst_local();       // isi mstFlag[]
-        draw_all_edges('.');       // semua link biasa
-        draw_edges_flag(mstFlag, '='); // mst jadi '='
-        draw_nodes();
-        flush();
+        clear(); layout_circle(); compute_mst();
+        draw_all_edges('.'); draw_flag_edges(mstEdge, '='); draw_boxes(); flush();
     }
-
     public static void show_path(String A, String B) {
-        clear();
-        layout_circle();
-        dijkstra_path(A, B);       // set pathEdge[] sesuai rute
-        draw_all_edges('.');       // semua link biasa
-        draw_edges_flag(pathEdge, '#'); // path jadi '#'
-        draw_nodes();
-        flush();
+        clear(); layout_circle(); compute_path(A,B);
+        draw_all_edges('.'); draw_flag_edges(pathEdge, '#'); draw_boxes(); flush();
     }
 
-    // ==== Kanvas & util ====
+    // ===== Canvas helpers =====
     static void clear(){
-        int y,x;
-        for (y=0;y<H;y++){
-            for (x=0;x<W;x++) cv[y][x] = ' ';
-        }
+        for (int y=0;y<H;y++) for (int x=0;x<W;x++) cv[y][x]=' ';
     }
     static void put(int x,int y,char c){
         if (x>=0 && x<W && y>=0 && y<H) cv[y][x]=c;
     }
     static void text(int x,int y,String s){
-        int i;
-        for (i=0;i<s.length();i++) put(x+i,y,s.charAt(i));
+        for (int i=0;i<s.length();i++) put(x+i,y,s.charAt(i));
     }
     static void flush(){
-        int y,x;
-        for (y=0;y<H;y++){
+        for (int y=0;y<H;y++){
             String line="";
-            for (x=0;x<W;x++) line += cv[y][x];
+            for (int x=0;x<W;x++) line+=cv[y][x];
             System.out.println(line);
         }
     }
 
-    // ==== Layout lingkaran ====
+    // ===== Layout: circle with adaptive radius =====
     static void layout_circle(){
         int n = Graph.swCount;
-        double cx = W/2.0, cy = H/2.0;
-        double r = Math.min(W, H)*0.38;           // radius
-        int i;
-        for (i=0;i<n;i++){
-            double ang = (2.0*Math.PI*i)/Math.max(1,n);
-            int x = (int)(cx + r*Math.cos(ang));
-            int y = (int)(cy + r*Math.sin(ang));
-            nx[i]=x; ny[i]=y;
+        if (n==0) return;
+
+        // hitung halfW (setengah lebar kotak) per node
+        int maxHalf = 0, sumBoxW = 0;
+        for (int i=0;i<n;i++){
+            String name = (Graph.swName[i]==null) ? "" : Graph.swName[i];
+            int boxW = name.length() + PAD_X*2;
+            if (boxW < MIN_BOX_W) boxW = MIN_BOX_W;
+            halfW[i] = boxW/2;
+            sumBoxW += boxW;
+            if (halfW[i] > maxHalf) maxHalf = halfW[i];
+        }
+
+        // sudut antar node
+        double step = (2.0*Math.PI) / n;
+
+        // radius awal: agar tidak mentok ke tepi canvas
+        double cx0 = W/2.0, cy0 = H/2.0;
+        double rBoundX = (W/2.0) - (maxHalf + 2);
+        double rBoundY = (H/2.0) - (BOX_H); // tinggi kotak 3 baris
+        double r = Math.min(rBoundX, rBoundY);
+
+        // radius minimal agar busur antar node >= rata-rata lebar kotak + gap
+        int avgBoxW = (sumBoxW / n);
+        double minArc = avgBoxW + MIN_GAP;
+        double rNeed = minArc / step; // arc = r * step  >= minArc
+        if (r < rNeed) r = rNeed;
+        if (r < 3) r = 3; // jaga-jaga
+
+        for (int i=0;i<n;i++){
+            double ang = i * step;
+            cx[i] = (int)(cx0 + r*Math.cos(ang));
+            cy[i] = (int)(cy0 + r*Math.sin(ang));
         }
     }
 
-    // ==== Gambar node & label ====
-    static void draw_nodes(){
-        int i;
-        for (i=0;i<Graph.swCount;i++){
-            put(nx[i], ny[i], 'O');
-            // label (maks 5 char biar muat)
-            String name = Graph.swName[i];
-            String lab = (name.length()<=5)?name:name.substring(0,5);
-            text(Math.max(0, nx[i]-lab.length()/2), Math.min(H-1, ny[i]+1), lab);
-        }
+    // ===== Boxes =====
+    static void draw_boxes(){
+        for (int i=0;i<Graph.swCount;i++) draw_box(i);
+    }
+    static void draw_box(int i){
+        String name = (Graph.swName[i]==null) ? "" : Graph.swName[i];
+        int boxW = halfW[i]*2; if (boxW < MIN_BOX_W) boxW = MIN_BOX_W;
+
+        int left = cx[i]-boxW/2;
+        int top  = cy[i]-1;
+        int right = left + boxW - 1;
+        int bottom = top + 2;
+
+        // top
+        put(left, top, '+'); for (int x=left+1;x<right;x++) put(x,top,'-'); put(right, top, '+');
+        // mid
+        put(left, cy[i], '|');
+        // left padding
+        for (int p=0; p<PAD_X; p++) put(left+1+p, cy[i], ' ');
+        // name
+        text(left+PAD_X+1-1, cy[i], name);
+        // right padding
+        int nameEnd = left + PAD_X + name.length();
+        for (int x=nameEnd+1; x<right; x++) put(x, cy[i], ' ');
+        put(right, cy[i], '|');
+        // bottom
+        put(left, bottom, '+'); for (int x=left+1;x<right;x++) put(x,bottom,'-'); put(right, bottom, '+');
     }
 
-    // ==== Gambar semua edges ====
+    // ===== Edges =====
     static void draw_all_edges(char ch){
-        int i;
-        for (i=0;i<Graph.linkCount;i++){
-            if (Graph.linkUp[i]==0) continue;
-            int a = idxSwitchOfPort(Graph.linkA[i]);
-            int b = idxSwitchOfPort(Graph.linkB[i]);
+        for (int e=0;e<Graph.linkCount;e++){
+            if (Graph.linkUp[e]==0) continue;
+            int a = idxOfPort(Graph.linkA[e]);
+            int b = idxOfPort(Graph.linkB[e]);
             if (a<0 || b<0) continue;
-            draw_line(nx[a], ny[a], nx[b], ny[b], ch);
+
+            // konektor: titik pada TEPI kotak, bukan pusat
+            int[] sa = connectorOnBox(a, b);
+            int[] sb = connectorOnBox(b, a);
+            draw_line(sa[0], sa[1], sb[0], sb[1], ch);
         }
     }
-    static void draw_edges_flag(int[] flag, char ch){
-        int i;
-        for (i=0;i<Graph.linkCount;i++){
-            if (Graph.linkUp[i]==0) continue;
-            if (flag[i]==1){
-                int a = idxSwitchOfPort(Graph.linkA[i]);
-                int b = idxSwitchOfPort(Graph.linkB[i]);
-                if (a<0 || b<0) continue;
-                draw_line(nx[a], ny[a], nx[b], ny[b], ch);
-            }
+    static void draw_flag_edges(int[] flag, char ch){
+        for (int e=0;e<Graph.linkCount;e++){
+            if (Graph.linkUp[e]==0 || flag[e]!=1) continue;
+            int a = idxOfPort(Graph.linkA[e]);
+            int b = idxOfPort(Graph.linkB[e]);
+            if (a<0 || b<0) continue;
+            int[] sa = connectorOnBox(a, b);
+            int[] sb = connectorOnBox(b, a);
+            draw_line(sa[0], sa[1], sb[0], sb[1], ch);
         }
     }
 
-    // ==== Bresenham sederhana ====
+    // Bresenham
     static void draw_line(int x0,int y0,int x1,int y1,char ch){
-        int dx = Math.abs(x1 - x0);
-        int dy = Math.abs(y1 - y0);
+        int dx = abs(x1 - x0), dy = abs(y1 - y0);
         int sx = (x0 < x1) ? 1 : -1;
         int sy = (y0 < y1) ? 1 : -1;
         int err = dx - dy;
-
         while (true){
             put(x0,y0,ch);
             if (x0==x1 && y0==y1) break;
@@ -143,56 +176,80 @@ public class AsciiTopo {
         }
     }
 
-    // ==== helper ====
-    static int idxSwitchOfPort(String port){
-        // "S1:2" → "S1"
+    // ===== Connector: intersection ray(center->otherCenter) dengan perimeter kotak =====
+    static int[] connectorOnBox(int i, int j){
+        int bw = halfW[i]*2; if (bw < MIN_BOX_W) bw = MIN_BOX_W;
+        int left = cx[i]-bw/2, right = left+bw-1;
+        int top = cy[i]-1, bottom = top+2;
+
+        int dx = cx[j]-cx[i];
+        int dy = cy[j]-cy[i];
+        if (dx==0 && dy==0) return new int[]{cx[i], cy[i]}; // degenerate
+
+        // pilih sisi dominan agar titik keluar pas di tepi
+        if (abs(dx) >= abs(dy)) {
+            // horizontal-dominant → tembak kanan/kiri
+            int x = (dx >= 0) ? right : left;
+            // proporsional y
+            // t = (x - cx[i]) / dx
+            // y = cy[i] + t*dy
+            double t = ((double)(x - cx[i])) / (double)dx;
+            int y = cy[i] + (int)Math.round(t * dy);
+            // clamp ke tepi vertikal
+            if (y < top) y = top;
+            if (y > bottom) y = bottom;
+            return new int[]{x, y};
+        } else {
+            // vertical-dominant → tembak atas/bawah
+            int y = (dy >= 0) ? bottom : top;
+            double t = ((double)(y - cy[i])) / (double)dy;
+            int x = cx[i] + (int)Math.round(t * dx);
+            if (x < left) x = left;
+            if (x > right) x = right;
+            return new int[]{x, y};
+        }
+    }
+
+    // ===== Helpers =====
+    static int idxOfPort(String port){
         int k = indexOf(port, ':');
         String sw = (k<0)?port:port.substring(0,k);
-        return idxSwitch(sw);
+        return idxOfSwitch(sw);
     }
-    static int idxSwitch(String sw){
-        int i;
-        for (i=0;i<Graph.swCount;i++){
+    static int idxOfSwitch(String sw){
+        for (int i=0;i<Graph.swCount;i++){
             if (Graph.swName[i]!=null && Graph.swName[i].equals(sw)) return i;
         }
         return -1;
     }
     static int indexOf(String s,char c){
-        int i,n=s.length();
-        for (i=0;i<n;i++) if (s.charAt(i)==c) return i;
+        for (int i=0;i<s.length();i++) if (s.charAt(i)==c) return i;
         return -1;
     }
+    static int abs(int v){ return (v<0)?-v:v; }
 
-    static void kruskal_mst_local(){
-        int i;
-        for (i=0;i<Graph.linkCount;i++) mstFlag[i]=0;
+    // ===== Local MST (Kruskal) =====
+    static void compute_mst(){
+        for (int i=0;i<Graph.linkCount;i++) mstEdge[i]=0;
 
-        // kumpulkan edges aktif
-        int m=0;
-        int[] e = new int[Graph.linkCount];
-        for (i=0;i<Graph.linkCount;i++){
-            if (Graph.linkUp[i]==1) e[m++]=i;
-        }
-        // sort e[0..m) by cost (merge sort)
-        mergesort_edges(e, m);
+        int m=0; int[] idx=new int[Graph.linkCount];
+        for (int i=0;i<Graph.linkCount;i++) if (Graph.linkUp[i]==1) idx[m++]=i;
 
-        // union-find atas switch
-        int n = Graph.swCount;
-        int[] p = new int[n];
-        int[] r = new int[n];
-        for (i=0;i<n;i++){ p[i]=i; r[i]=0; }
+        mergesort_by_cost(idx,m);
 
-        for (i=0;i<m;i++){
-            int li = e[i];
-            int a = idxSwitchOfPort(Graph.linkA[li]);
-            int b = idxSwitchOfPort(Graph.linkB[li]);
-            if (a<0 || b<0) continue;
-            if (uf_union(p,r,a,b)){
-                mstFlag[li]=1;
-            }
+        int n=Graph.swCount;
+        int[] p=new int[n], r=new int[n];
+        for (int i=0;i<n;i++){ p[i]=i; r[i]=0; }
+
+        for (int k=0;k<m;k++){
+            int e=idx[k];
+            int a=idxOfPort(Graph.linkA[e]);
+            int b=idxOfPort(Graph.linkB[e]);
+            if (a<0||b<0) continue;
+            if (uf_union(p,r,a,b)) mstEdge[e]=1;
         }
     }
-    static int uf_find(int[] p,int x){ if (p[x]==x) return x; p[x]=uf_find(p,p[x]); return p[x]; }
+    static int uf_find(int[] p,int x){ if(p[x]==x) return x; p[x]=uf_find(p,p[x]); return p[x]; }
     static boolean uf_union(int[] p,int[] r,int a,int b){
         int pa=uf_find(p,a), pb=uf_find(p,b);
         if (pa==pb) return false;
@@ -201,88 +258,68 @@ public class AsciiTopo {
         else { p[pb]=pa; r[pa]++; }
         return true;
     }
-    static void mergesort_edges(int[] idx,int len){
+    static void mergesort_by_cost(int[] a,int len){
         if (len<=1) return;
-        int[] aux = new int[len];
-        ms(idx,aux,0,len);
+        int[] aux=new int[len]; ms(a,aux,0,len);
     }
     static void ms(int[] a,int[] aux,int lo,int hi){
         if (hi-lo<=1) return;
-        int mid=(lo+hi)/2;
-        ms(a,aux,lo,mid); ms(a,aux,mid,hi);
-        int i; for (i=lo;i<hi;i++) aux[i]=a[i];
-        int p=lo,q=mid,k=lo;
-        while (p<mid && q<hi){
-            int ap=aux[p], aq=aux[q];
-            int cp=Graph.linkCost[ap], cq=Graph.linkCost[aq];
-            if (cp<=cq) a[k++]=aux[p++]; else a[k++]=aux[q++];
+        int mid=(lo+hi)/2; ms(a,aux,lo,mid); ms(a,aux,mid,hi);
+        for (int i=lo;i<hi;i++) aux[i]=a[i];
+        int i=lo,j=mid,k=lo;
+        while(i<mid && j<hi){
+            int ei=aux[i], ej=aux[j];
+            int ci=Graph.linkCost[ei], cj=Graph.linkCost[ej];
+            if (ci<=cj) a[k++]=aux[i++]; else a[k++]=aux[j++];
         }
-        while (p<mid) a[k++]=aux[p++];
-        while (q<hi) a[k++]=aux[q++];
+        while(i<mid) a[k++]=aux[i++];
+        while(j<hi) a[k++]=aux[j++];
     }
 
-    static void dijkstra_path(String A, String B){
-        int s = idxSwitch(A);
-        int t = idxSwitch(B);
-        int n = Graph.swCount;
-        int i;
+    // ===== Local shortest path (Dijkstra O(n^2)) =====
+    static void compute_path(String A,String B){
+        for (int i=0;i<Graph.linkCount;i++) pathEdge[i]=0;
 
-        // reset flags
-        for (i=0;i<Graph.linkCount;i++) pathEdge[i]=0;
+        int s=idxOfSwitch(A), t=idxOfSwitch(B);
+        if (s<0||t<0||s==t) return;
 
-        if (s<0 || t<0 || s==t) return;
-
-        int INF = 1_000_000_000;
-        int[] dist = new int[n];
-        int[] prev = new int[n];
-        int[] used = new int[n];
-        for (i=0;i<n;i++){ dist[i]=INF; prev[i]=-1; used[i]=0; }
+        int n=Graph.swCount, INF=1_000_000_000;
+        int[] dist=new int[n], prev=new int[n], used=new int[n];
+        for (int i=0;i<n;i++){ dist[i]=INF; prev[i]=-1; used[i]=0; }
         dist[s]=0;
 
-        // Dijkstra dengan pemilihan minimum linear
         for (int it=0; it<n; it++){
-            int u=-1; int best=INF;
-            for (i=0;i<n;i++) if (used[i]==0 && dist[i]<best){ best=dist[i]; u=i; }
-            if (u==-1) break;
-            used[u]=1;
-            // relax semua neighbor via edges aktif
-            int e;
-            for (e=0;e<Graph.linkCount;e++){
+            int u=-1, best=INF;
+            for (int i=0;i<n;i++) if (used[i]==0 && dist[i]<best){ best=dist[i]; u=i; }
+            if (u==-1) break; used[u]=1;
+
+            for (int e=0;e<Graph.linkCount;e++){
                 if (Graph.linkUp[e]==0) continue;
-                int a = idxSwitchOfPort(Graph.linkA[e]);
-                int b = idxSwitchOfPort(Graph.linkB[e]);
-                if (a<0 || b<0) continue;
+                int a=idxOfPort(Graph.linkA[e]), b=idxOfPort(Graph.linkB[e]);
+                if (a<0||b<0) continue;
                 if (a==u){
-                    int nd = dist[u] + Graph.linkCost[e];
-                    if (nd < dist[b]){ dist[b]=nd; prev[b]=u; }
+                    int nd=dist[u]+Graph.linkCost[e];
+                    if (nd<dist[b]){ dist[b]=nd; prev[b]=u; }
                 } else if (b==u){
-                    int nd = dist[u] + Graph.linkCost[e];
-                    if (nd < dist[a]){ dist[a]=nd; prev[a]=u; }
+                    int nd=dist[u]+Graph.linkCost[e];
+                    if (nd<dist[a]){ dist[a]=nd; prev[a]=u; }
                 }
             }
         }
 
-        if (prev[t]==-1) return; // no path
-
-        // tandai edges di jalur s->t
-        int cur = t;
-        while (cur != s){
-            int par = prev[cur];
-            // cari edge (par,cur) dan mark
-            mark_edge_between(par, cur);
-            cur = par;
+        if (prev[t]==-1) return;
+        int cur=t;
+        while(cur!=s){
+            int par=prev[cur];
+            mark_edge(par,cur);
+            cur=par;
         }
     }
-
-    static void mark_edge_between(int u,int v){
-        int i;
-        for (i=0;i<Graph.linkCount;i++){
-            if (Graph.linkUp[i]==0) continue;
-            int a = idxSwitchOfPort(Graph.linkA[i]);
-            int b = idxSwitchOfPort(Graph.linkB[i]);
-            if ((a==u && b==v) || (a==v && b==u)){
-                pathEdge[i]=1; return;
-            }
+    static void mark_edge(int u,int v){
+        for (int e=0;e<Graph.linkCount;e++){
+            if (Graph.linkUp[e]==0) continue;
+            int a=idxOfPort(Graph.linkA[e]), b=idxOfPort(Graph.linkB[e]);
+            if ((a==u&&b==v)||(a==v&&b==u)){ pathEdge[e]=1; return; }
         }
     }
 }

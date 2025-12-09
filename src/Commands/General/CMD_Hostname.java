@@ -6,7 +6,7 @@ import CLI.CLI_Shell;
 public class CMD_Hostname implements CLI_Command {
     public void execute(String[] args) {
         if (args == null || args.length < 1) {
-            System.out.println("usage: change-hostname <NEW_HOSTNAME>");
+            System.out.println("usage: hostname <NEW_HOSTNAME>");
             return;
         }
         String newHostname = args[0];

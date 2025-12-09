@@ -86,7 +86,7 @@ public class Graph {
         return indexOf(s, ':') >= 0;
     }
 
-    // ====== LINK MGMT ======
+    // Link Management
     public static void addLink(String port1, String port2, int cost) {
         if (!isPortFormat(port1) || !isPortFormat(port2)) {
             println("% bad port format, expected S:if");
@@ -236,31 +236,31 @@ public class Graph {
         }
     }
 
-    private static void print(String s){ System.out.print(s); }
-    private static void println(String s){ System.out.println(s); }
-    private static int indexOf(String s, char c){
+    public static void print(String s){ System.out.print(s); }
+    public static void println(String s){ System.out.println(s); }
+    public static int indexOf(String s, char c){
         int n = s.length();
         int i;
         for (i = 0; i < n; i++) if (s.charAt(i) == c) return i;
         return -1;
     }
-    private static int length(String s){ return s.length(); }
-    private static char charAt(String s, int i){ return s.charAt(i); }
-    private static boolean startsWith(String s, String prefix){
+    public static int length(String s){ return s.length(); }
+    public static char charAt(String s, int i){ return s.charAt(i); }
+    public static boolean startsWith(String s, String prefix){
         int n = s.length(), m = prefix.length();
         if (m > n) return false;
         int i;
         for (i = 0; i < m; i++) if (s.charAt(i) != prefix.charAt(i)) return false;
         return true;
     }
-    private static boolean containsStr(String[] arr, int len, String val){
+    public static boolean containsStr(String[] arr, int len, String val){
         int i;
         for (i = 0; i < len; i++){
             if (arr[i] != null && arr[i].equals(val)) return true;
         }
         return false;
     }
-    private static boolean equalsUnordered(String a1, String b1, String a2, String b2){
+    public static boolean equalsUnordered(String a1, String b1, String a2, String b2){
         if (a1 == null || b1 == null || a2 == null || b2 == null) return false;
         if (a1.equals(a2) && b1.equals(b2)) return true;
         if (a1.equals(b2) && b1.equals(a2)) return true;
@@ -268,7 +268,7 @@ public class Graph {
     }
 
     // ganti semua nilai oldVal menjadi newVal pada LinkedList indeks link
-    private static void replaceAll(LinkedList list, int oldVal, int newVal){
+    public static void replaceAll(LinkedList list, int oldVal, int newVal){
         LLNode cur = list.getHead();
         while (cur != null) {
             if (cur.data == oldVal) cur.data = newVal;

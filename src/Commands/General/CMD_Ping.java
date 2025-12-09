@@ -26,6 +26,6 @@ public class CMD_Ping implements CLI_Command {
             NetEngine.tick();
         }
     }
-    private int parse(String s){ try { return Integer.parseInt(s); } catch(Exception e){ return 0; } }
+    public int parse(String s){ try { return Integer.parseInt(s); } catch(Exception e){ return 0; } }
     public String getDescription() { return "Send ICMP-like echo from SRC to DST"; }
 }

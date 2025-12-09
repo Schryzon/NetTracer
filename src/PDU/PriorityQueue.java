@@ -1,6 +1,6 @@
 package PDU;
 public class PriorityQueue {
-    private PQNode front;
+    public PQNode front;
 
     public PriorityQueue() {
         front = null;

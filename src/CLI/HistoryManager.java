@@ -1,10 +1,10 @@
 package CLI;
 
 public class HistoryManager {
-    private static Stack cmdHistory = new Stack();
-    private static Stack undoStack = new Stack();
-    private static Stack redoStack = new Stack();
-    private static boolean isPerformingUndoRedo = false;
+    public static Stack cmdHistory = new Stack();
+    public static Stack undoStack = new Stack();
+    public static Stack redoStack = new Stack();
+    public static boolean isPerformingUndoRedo = false;
 
     public static void showLog() {
         System.out.println("Command History: ");

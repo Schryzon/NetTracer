@@ -24,7 +24,7 @@ public class CMD_Help implements CLI_Command {
         }
     }
 
-    private String pad(String s, int n) {
+    public String pad(String s, int n) {
         int len = s.length();
         if (len >= n) return s;
         String out = s;

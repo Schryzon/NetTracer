@@ -1,112 +1,119 @@
 package Engine;
-// NetEngine.java — event loop ping berbasis PriorityQueue (String,data; int,priority)
+
 import PDU.*;
 
+/**
+ * NetEngine: event-driven ping simulator.
+ * - Priority (smaller = sooner) merepresentasikan waktu deliver (tick).
+ * - Gunakan NetEngine.tick() untuk memajukan waktu dan memproses event due.
+ */
 public class NetEngine {
 
-    // current time tick
-    public static int now = 0;
+    public static int now = 0;                 // current tick
+    private static final int VISUAL_DELAY_MS = 750;
+    private static final int REPLY_TTL = 64;
 
-    // antrean event global (gunakan PriorityQueue buatan kamu)
-    public static PriorityQueue q = new PriorityQueue();
+    public static PriorityQueue q = new PriorityQueue(); // stores encoded PDU strings
 
-    // satu tick: proses semua event dengan priority == now
-    public static void tick(){
+    /** Advance one tick and process all due events. */
+    public static void tick() {
+        try { Thread.sleep(VISUAL_DELAY_MS); } catch (Exception ignored) {}
         now++;
 
-        // karena PQ kamu sudah punya peekPriority(), proses selama event due
-        while (!q.isEmpty()){
-            int pr = q.peekPriority();
-            if (pr > now) break;
-            String pdu = q.dequeue(); // due event
-            handlePDU(pdu);
+        while (!q.isEmpty()) {
+            int dueTick = q.peekPriority();
+            if (dueTick > now) break;
+            String pdu = q.dequeue();
+            processPdu(pdu);
         }
     }
 
-    // kirim ping request: jadwalkan PDU REQ di tick now
-    public static void sendPing(String src, String dst, int seq, int ttl){
+    /** Schedule an ICMP-like echo request along the BFS path from src to dst. */
+    public static void sendPing(String src, String dst, int seq, int ttl) {
         String pathCsv = NetRouting.bfsPathCsv(src, dst);
         int pathLen = NetRouting.csvCount(pathCsv);
-        if (pathLen == 0){
+        if (pathLen == 0) {
             System.out.println("PING: no path from " + src + " to " + dst);
             return;
         }
-        // hopIdx 0 = berada di node src, akan dikirim ke hop berikutnya
+
         String req = PDU.make("REQ", seq, src, dst, ttl, now, 0, pathLen, pathCsv);
-        // schedule immediate delivery (now+1) ke hop berikutnya
-        q.enqueue(req, now + 1);
-        System.out.println("PING " + dst + " from " + src + ": seq=" + seq + " ttl=" + ttl + " path=" + pathCsv);
+        q.enqueue(req, now + 1); // first hop on next tick
+
+        System.out.println("PING " + dst + " from " + src +
+                           ": seq=" + seq + " ttl=" + ttl + " path=" + pathCsv);
     }
 
-    // handler event: kirim maju 1 hop; jika sampai di dst → kirim reply; jika reply sampai src → print RTT
-    static void handlePDU(String pdu){
-        // safety
-        if (pdu == null) return;
-        String type = PDU.getType(pdu);
-        int    seq  = PDU.getSeq(pdu);
-        String src  = PDU.getSrc(pdu);
-        String dst  = PDU.getDst(pdu);
-        int    ttl  = PDU.getTTL(pdu);
-        int    ts   = PDU.getTSent(pdu);
-        int    hop  = PDU.getHop(pdu);
-        int    plen = PDU.getPathLen(pdu);
-        String path = PDU.getPathCsv(pdu);
 
-        if (ttl <= 0){
+    private static void processPdu(String pdu) {
+        if (pdu == null) return;
+
+        String type     = PDU.getType(pdu);     // REQ | RPL
+        int    seq      = PDU.getSeq(pdu);
+        String source   = PDU.getSrc(pdu);
+        String dest     = PDU.getDst(pdu);
+        int    ttl      = PDU.getTTL(pdu);
+        int    sentAt   = PDU.getTSent(pdu);
+        int    hopIndex = PDU.getHop(pdu);
+        int    pathLen  = PDU.getPathLen(pdu);
+        String pathCsv  = PDU.getPathCsv(pdu);
+
+        if (ttl <= 0) {
             System.out.println("TTL expired for seq=" + seq);
             return;
         }
 
-        if (type.equals("REQ")){
-            // posisi saat ini = path[hop]
-            String curNode = NetRouting.csvAt(path, hop);
-            // next hop:
-            int nextHopIdx = hop + 1;
-            if (nextHopIdx >= plen){
-                // sudah lewat batas (harusnya tidak terjadi), treat as arrived
-                deliverRequestAtDst(seq, src, dst, ts, path, plen);
-                return;
-            }
-            String nextNode = NetRouting.csvAt(path, nextHopIdx);
-
-            // kalau next == dst → anggap tiba di dst pada tick ini (simulasi per hop)
-            if (nextNode.equals(dst)){
-                // jadwalkan deliver di dst
-                String arrive = PDU.make("REQ", seq, src, dst, ttl-1, ts, nextHopIdx, plen, path);
-                q.enqueue(arrive, now); // tiba di tick yang sama (atau now+1 kalau mau delay)
-                // proses arrival ketika dequeue berikutnya
-            } else {
-                // kirim ke hop berikutnya
-                String forward = PDU.make("REQ", seq, src, dst, ttl-1, ts, nextHopIdx, plen, path);
-                q.enqueue(forward, now + 1);
-            }
-
-            // jika ini event “arrival di dst” (hop menunjuk dst)
-            if (curNode.equals(dst)){
-                deliverRequestAtDst(seq, src, dst, ts, path, plen);
-            }
-
-        } else { // RPL
-            // reply berjalan mundur: path reversed secara indeks
-            // Kita encode path yang sama, tapi hop berkurang
-            String curNode = NetRouting.csvAt(path, hop);
-            int prevHopIdx = hop - 1;
-
-            if (prevHopIdx < 0){
-                // sampai ke src
-                int rtt = now - ts;
-                System.out.println("Reply from " + src + ": seq=" + seq + " rtt=" + rtt + " ticks");
-                return;
-            }
-            String back = PDU.make("RPL", seq, src, dst, ttl-1, ts, prevHopIdx, plen, path);
-            q.enqueue(back, now + 1);
+        if (type.equals("REQ")) {
+            handleRequest(seq, source, dest, ttl, sentAt, hopIndex, pathLen, pathCsv);
+        } else {
+            handleReply(seq, source, dest, ttl, sentAt, hopIndex, pathLen, pathCsv);
         }
     }
 
-    static void deliverRequestAtDst(int seq, String src, String dst, int ts, String path, int plen){
+    private static void handleRequest(
+            int seq, String src, String dst, int ttl, int sentAt,
+            int hopIndex, int pathLen, String pathCsv) {
+
+        String currentNode = NetRouting.csvAt(pathCsv, hopIndex);
+        int nextHop = hopIndex + 1;
+
+        // Arrived (defensive: if nextHop passes end)
+        if (nextHop >= pathLen || currentNode.equals(dst)) {
+            arriveAtDestination(seq, src, dst, sentAt, pathCsv, pathLen);
+            return;
+        }
+
+        String nextNode = NetRouting.csvAt(pathCsv, nextHop);
+
+        // fast-arrival optimization when next node is the destination
+        String forward = PDU.make("REQ", seq, src, dst, ttl - 1, sentAt, nextHop, pathLen, pathCsv);
+        int deliverAt = nextNode.equals(dst) ? now : now + 1;
+        q.enqueue(forward, deliverAt);
+    }
+
+    private static void handleReply(
+            int seq, String src, String dst, int ttl, int sentAt,
+            int hopIndex, int pathLen, String pathCsv) {
+
+        String currentNode = NetRouting.csvAt(pathCsv, hopIndex);
+        int prevHop = hopIndex - 1;
+
+        // reached source
+        if (prevHop < 0) {
+            int rtt = now - sentAt;
+            System.out.println("Reply from " + src + ": seq=" + seq + " rtt=" + rtt + " ticks");
+            return;
+        }
+
+        String back = PDU.make("RPL", seq, src, dst, ttl - 1, sentAt, prevHop, pathLen, pathCsv);
+        q.enqueue(back, now + 1);
+    }
+
+    private static void arriveAtDestination(
+            int seq, String src, String dst, int sentAt, String pathCsv, int pathLen) {
+
         System.out.println("Echo request arrived at " + dst + " (seq=" + seq + "), sending reply...");
-        // buat reply: hop = index node dst dalam path = plen-1
-        String reply = PDU.make("RPL", seq, src, dst, 64, ts, plen - 1, plen, path);
+        String reply = PDU.make("RPL", seq, src, dst, REPLY_TTL, sentAt, pathLen - 1, pathLen, pathCsv);
         q.enqueue(reply, now + 1);
     }
 }
